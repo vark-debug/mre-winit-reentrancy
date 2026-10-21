@@ -89,6 +89,10 @@ A winit-level fix (deferring the event instead of panicking, or not marking the 
 `panic_cannot_unwind`) would protect every application at once; see
 [winit#3992](https://github.com/rust-windowing/winit/issues/3992).
 
+## Status in winit 0.31.0-beta.3
+
+Tested against `winit =0.31.0-beta.3` on the [`winit-0.31-beta`](https://github.com/vark-debug/mre-winit-reentrancy/tree/winit-0.31-beta) branch: the guard **moved but was not removed** — the re-entrancy panic now lives in `winit-common/src/event_handler.rs:138`, but `panic_cannot_unwind` was dropped, so the unrecoverable abort (SIGABRT, exit 134) became a catchable panic (exit 101). The re-entrant execution itself, and the panic on it, remain.
+
 ## License
 
 MIT
