@@ -1,0 +1,14 @@
+[package]
+name = "mre-winit-reentrancy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Same versions as the crashing applications (storytold/filmcraft, gridcraft, figcraft).
+winit = "=0.30.13"
+rfd = "=0.17.2"
+pollster = "0.4"
+# Software rendering for the buttons (no GUI toolkit between the MRE and winit).
+softbuffer = "0.4"
+# Decoding the embedded UI image (all on-screen text is a hand-typeset PNG).
+png = "0.17"
