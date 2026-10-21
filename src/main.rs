@@ -24,11 +24,12 @@ use std::num::NonZeroU32;
 use std::sync::mpsc;
 
 use winit::application::ApplicationHandler;
+use winit::cursor::{Cursor, CursorIcon};
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ButtonSource, ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::raw_window_handle::{DisplayHandle, HasDisplayHandle, HasWindowHandle, WindowHandle};
-use winit::window::{Cursor, CursorIcon, Window, WindowId};
+use winit::window::{Window, WindowAttributes, WindowId};
 
 const WHITE: u32 = 0xFF_F8F8F8;
 const RED: u32 = 0xFF_C04040;
@@ -46,7 +47,7 @@ const IMG: &[u8] = include_bytes!("Untitled-1.png");
 type Surface = softbuffer::Surface<DisplayHandle<'static>, WindowHandle<'static>>;
 
 struct App {
-    window: Option<std::sync::Arc<Window>>,
+    window: Option<Box<dyn Window>>,
     surface: Option<Surface>,
     cursor: (f64, f64),
     /// The async sheet runs on a worker thread; its answer arrives here.
@@ -60,8 +61,8 @@ struct App {
 fn main() {
     let (img, img_w, img_h) = decode_image();
     let ev = EventLoop::new().expect("event loop");
-    let mut app = App { window: None, surface: None, cursor: (0.0, 0.0), answer: None, img, img_w, img_h };
-    ev.run_app(&mut app).expect("run app");
+    let app = App { window: None, surface: None, cursor: (0.0, 0.0), answer: None, img, img_w, img_h };
+    ev.run_app(app).expect("run app");
 }
 
 /// Decode the embedded PNG into 0xAARRGGBB pixels.
@@ -84,29 +85,28 @@ fn decode_image() -> (Vec<u32>, usize, usize) {
 }
 
 impl ApplicationHandler for App {
-    fn resumed(&mut self, el: &ActiveEventLoop) {
+    fn can_create_surfaces(&mut self, el: &dyn ActiveEventLoop) {
         if self.window.is_some() {
             return;
         }
-        let attrs = Window::default_attributes()
-            .with_title("winit#3992 MRE — the red button opens a sync dialog (buggy), the green one an async sheet (fixed). The window must be larger than the dialog to reproduce.")
-            .with_inner_size(LogicalSize::new(760.0, 420.0));
-        let window = std::sync::Arc::new(el.create_window(attrs).expect("create window"));
+        let attrs =
+            WindowAttributes::default().with_title("winit#3992 MRE — the red button opens a sync dialog (buggy), the green one an async sheet (fixed). The window must be larger than the dialog to reproduce.").with_surface_size(LogicalSize::new(760.0, 420.0));
+        let window = el.create_window(attrs).expect("create window");
         // SAFETY: both raw handles come from live winit objects that outlive the surface (they
         // are held in `App` for the whole session).
         let dh = unsafe { DisplayHandle::borrow_raw(el.display_handle().expect("display handle").as_raw()) };
         let context = softbuffer::Context::new(dh).expect("softbuffer context");
         let wh = unsafe { WindowHandle::borrow_raw(window.window_handle().expect("window handle").as_raw()) };
         let surface = softbuffer::Surface::new(&context, wh).expect("softbuffer surface");
-        self.window = Some(window.clone());
+        self.window = Some(window);
         self.surface = Some(surface);
         self.window.as_ref().unwrap().request_redraw();
     }
 
-    fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, el: &dyn ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => el.exit(),
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::PointerMoved { position, .. } => {
                 self.cursor = (position.x, position.y);
                 let Some(w) = &self.window else { return };
                 w.set_cursor(Cursor::from(if hovered_button(&self.cursor).is_some() {
@@ -117,7 +117,7 @@ impl ApplicationHandler for App {
                 w.request_redraw();
             }
             WindowEvent::RedrawRequested => self.draw(),
-            WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => match hovered_button(&self.cursor) {
+            WindowEvent::PointerButton { state: ElementState::Pressed, button: ButtonSource::Mouse(MouseButton::Left), .. } => match hovered_button(&self.cursor) {
                 Some(0) => {
                     // The nested run loop runs inside this handler: the shape that trips the
                     // re-entrancy guard when a drag over this window queues an event.
@@ -144,7 +144,7 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, _el: &dyn ActiveEventLoop) {
         if let Some(rx) = &self.answer
             && let Ok(picked) = rx.try_recv()
         {
@@ -158,7 +158,7 @@ impl App {
     fn draw(&mut self) {
         let Some(w) = &self.window else { return };
         let Some(surface) = &mut self.surface else { return };
-        let size = w.inner_size();
+        let size = w.surface_size();
         let (bw, bh) = (size.width.max(1) as usize, size.height.max(1) as usize);
         let _ = surface.resize(NonZeroU32::new(bw as u32).expect("nonzero"), NonZeroU32::new(bh as u32).expect("nonzero"));
         let Ok(mut buf) = surface.buffer_mut() else { return };

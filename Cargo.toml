@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 # Same versions as the crashing applications (storytold/filmcraft, gridcraft, figcraft).
-winit = "=0.30.13"
+# The `winit-0.31-beta` branch switches to "=0.31.0-beta.3", where the re-entrancy guard
+# no longer panics (winit-appkit's maybe_queue_with_handler just queues + logs).
+winit = "=0.31.0-beta.3"
 rfd = "=0.17.2"
 pollster = "0.4"
 # Software rendering for the buttons (no GUI toolkit between the MRE and winit).

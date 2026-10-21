@@ -89,6 +89,30 @@ A winit-level fix (deferring the event instead of panicking, or not marking the 
 `panic_cannot_unwind`) would protect every application at once; see
 [winit#3992](https://github.com/rust-windowing/winit/issues/3992).
 
+## Status in winit 0.31.0-beta.3
+
+This branch (`winit-0.31-beta`) also runs against `winit =0.31.0-beta.3` — the guard was
+**moved but not removed**:
+
+| | winit 0.30.13 | winit 0.31.0-beta.3 |
+|---|---|---|
+| panic location | `winit/src/platform_impl/macos/event_handler.rs:135` | `winit-common/src/event_handler.rs:138` |
+| `panic_cannot_unwind` | yes → **SIGABRT (exit 134)** | **removed** → catchable panic (exit 101) |
+| re-entrancy still panics | yes | yes |
+
+The macOS backend was split into `winit-appkit` + `winit-common` in 0.31, and the guard now
+lives in `winit-common`'s `handle()` — re-entrant execution of the queued closure still happens
+(the nested run loop still runs it), it still panics, but the panic is a normal unwinding one
+that an application's `catch_unwind` can survive. The `panic_cannot_unwind` attribute was
+dropped, which turns the unrecoverable abort into a recoverable error. Deferring the event
+instead of panicking (the cleaner fix) is still not implemented.
+
+```text
+thread 'main' panicked at winit-common-0.31.0-beta.3/src/event_handler.rs:138:17:
+tried to handle event while another event is currently being handled
+(exit code 101)
+```
+
 ## License
 
 MIT
