@@ -17,8 +17,9 @@ One window, two buttons:
 - **green button (FIXED: Async Sheet)** — opens an `rfd::AsyncFileDialog` completion-handler
   sheet begun on the main thread and awaited on a worker thread; the frame loop keeps running.
 
-All on-screen text is a hand-typeset PNG embedded in the binary — the only dependencies are
-`winit =0.30.13`, `rfd =0.17.2`, `softbuffer` (rendering) and `png` (decoding that image). No GUI
+All on-screen text is an embedded public-domain 8x8 dot-matrix font (font8x8, MSB-left) rendered
+straight into the softbuffer pixels — the only dependencies are `winit =0.30.13`, `rfd =0.17.2`,
+`softbuffer` (rendering) and `pollster` (awaiting the async dialog). No GUI
 toolkit sits between the reproduction and winit.
 
 ## The bug
